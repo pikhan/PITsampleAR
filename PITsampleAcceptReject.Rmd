@@ -1,0 +1,168 @@
+---
+title: "PIT Sample Generation and Accept/Reject Method"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**PIT Sample Generation for Given CDF**
+
+We will use the PIT method to generate a sample of size $n$ from the distribution given by its c.d.f.
+\[F_X(x)=-\frac{x(x-2a)}{a^2},\quad a>0, x\in(0,a).\]
+Accordingly,
+\[F_X^{-1}(u) = a-a \sqrt{1-u},\quad a>0, u\in (0,1). \] In solving this, the negative branch of the resultant quadratic roots was chosen to maintain the fact that $x \in (0,a)$ as otherwise the inverse would map $u$ to $x > a$. 
+
+
+```{r pitexp, echo=TRUE}
+# Calculations
+a <- 7                # parameter
+n <- 100              # sample size
+U <- runif(n)         # generate uniform sample
+X <- (a-a*sqrt(1-U))  # generate our sample
+cdf <- ecdf(X)        # empirical cdf for X
+# Plot
+grd <-sort(X)         # grid for plots
+plot(cdf,do.points=FALSE,col='red',lwd=2,main='Empirical (red) vs theoretical (green) c.d.f.') # plot ecdf
+points(grd,-(grd*(grd-2*a))/(a^2),type='l',col='green') # add original cdf
+grid() # add grid
+```
+
+
+**Basic Accept/Reject Method**
+
+We will use the Accept/Reject method to generate a sample of size $n$ from the distribution given by its c.d.f. below:
+\[F_Y(y) = \frac{(y-5)^{\alpha}}{(A-5)^\alpha},\quad \alpha>1, A>5, y\in(5,A).\]
+As we can see, this c.d.f. has finite support on $(5,A)$. Then one can select $V\sim {\sf Uniform}(5,A)$ with p.d.f. $f_V(y) = 1/(A-5)$ for $y\in(5,A)$. The condition of step (b) from theorem 5.6.8 is then rewritten as
+\[U<\frac{1}{(A-5)\max f_Y(y)}\frac{f_Y(V)}{f_V(V)}=\frac{f_Y(V)}{\max f_Y(y)}.\] 
+This theorem then instructs our method to do the following:
+
+(a) Generate a point ($V \sim f_V,U' \sim (\max f_Y(y))({\sf Uniform}(0,1))$) within a minimal rectangle with sides parallel to the axes
+that contains the graph of the p.d.f. $f_Y(y)$.<br/>
+(b) If the $y$-coordinate of this point, $U'$, is below the p.d.f. $f_Y(V)$, then $Y=V$.
+Otherwise, repeat step (a).
+
+First, observe that the p.d.f. associated to our given distribution is
+\[\frac{\alpha(y-5)^{\alpha-1}}{(A-5)^{\alpha}},\quad \alpha>1, A>5, y\in(5,A).\]
+This is a monotonically increasing function and so attains maximum value at the rightmost endpoint which is evaluated to be $\frac{\alpha}{A-5}$.
+```{r AR1, echo=TRUE}
+# Parameters
+alpha <- 8            # parameter alpha > 1
+A <- 8                # parameter A > 5
+n <- 500              # required sample size
+M <- alpha/(A-5)      # maximum p.d.f. value
+Y <- 0                # initial sample
+
+grd = seq(5,A,by=0.01) # grid for plots, adjusting for 5<y<A
+plot(grd,((grd-5)^alpha)/((A-5)^alpha),type='l',col='blue',lwd=2,
+     main='Accept (red) / Reject (gray) points',
+     xlab='y',ylab = 'p.d.f.') # plot p.d.f. f_Y
+n0<-0 # sample size
+while(n0 < n) 
+{ 
+  U <- runif(1)                   # generate uniform point U
+  V <- runif(1,5,A)               # generate uniform point V
+  if(U*M<(((V-5)^alpha)/((A-5)^alpha)))
+  # Accept
+  {
+    n0<-n0+1  
+    Y[n0] <- V
+    points(V,U*M,type='p',pch=20,col='red') # add accepted point
+  }
+  else
+  # Reject
+  {points(V,U*M,type='p',pch=20,col='gray')} # add rejected point
+}
+grid() # add grid
+plot(ecdf(Y),do.points=FALSE,col='red',lwd=2,
+     main='Empirical c.d.f. (red) and given c.d.f (green)',
+     ylab='c.d.f',
+     xlab='y',
+     xlim=c(5,A)) # plot empirical c.d.f. of the generated sample
+points(grd,((grd-5)^alpha)/((A-5)^alpha),type='l',col='green',lwd=1) # add c.d.f. F_Y
+grid()
+```
+
+## Assignment 3
+**Sped-up Accept/Reject Method (Similar PDFs)**
+We will use the Accept/Reject method to generate a sample of size $n$ from a distribution given by the p.d.f below:
+\[f_Y(y) = \left\{
+\begin{align}
+\frac{2y}{a},& \quad 0\le y \le a,\\
+\frac{2(1-y)}{1-a},& \quad a< y \le 1
+\end{align}
+\right.,\quad 0<a<1, y\in(0,1).\]
+The method will use a Beta distributed r.v. $V$. We will select the parameters via a ratio test.
+```{r AR2_test, echo=TRUE}
+# Calculations
+ourPdf <- function(y,a){
+out <- numeric(length = length(y))
+    for(i in seq_along(y)) {
+      if (y[i] <= a) {
+        out[i] <- 2*y[i]/a
+      }
+      else {
+        out[i] <- 2*(1-y[i])/(1-a)
+      }
+    }
+    out
+}
+
+a <-0.5               # parameter a in Y
+alpha1 <- 2            # parameter alpha in V
+beta1 <- 2              # parameter beta in V
+
+d <- 0.001
+grd <- seq(d,1-d,by=d)
+
+ratio <- ourPdf(grd,a)/dbeta(grd,alpha1,beta1) # ratio of p.d.f.s
+M <- max(ratio) # maximum ratio value
+Mx <- grd[which.max(ratio)] # maximum ratio position
+plot(grd,ratio,type='l',
+     main='Ratio between our p.d.f.s: f_Y(y)/f_V(y)',
+     xlab='y',
+     ylab ='Ratio') # plot ratio
+points(Mx,M,type='p',pch=20,col='red') # add the maximum point
+grid()
+```
+
+Playing around with the above code (changing the $\alpha,\beta$ and a parameters) it looks like the choice of $\alpha=2, \beta=2$ is a good integral choice to minimize the ratio so that the "envelope" is not too large. This is good for a near 0.5 but if a is more extremal this choice is extremely bad.
+
+```{r AR_2, echo=TRUE}
+n <- 500                 # required sample size
+
+plot(grd,ourPdf(grd,a),type='l',col='blue',lwd=2,
+     main='Accept (red) / Reject (gray) points',
+     xlab='y',ylab = 'p.d.f.') # plot p.d.f. f_Y
+Y<-0
+n0<-0 # sample size
+while(n0 < n) 
+{
+  U <- runif(1)                      # generate uniform point U
+  V <- rbeta(1,alpha1,beta1)         # generate Beta point V
+  if(U*M<ourPdf(V,a)/dbeta(V,alpha1,beta1))
+  # Accept
+  {
+    n0<-n0+1  
+    Y[n0] <- V
+    points(V,U*M*dbeta(V,alpha1,beta1),type='p',pch=20,col='red')
+  }
+  else
+  # Reject
+  {points(V,U*M*dbeta(V,alpha1,beta1),type='p',pch=20,col='gray')}
+}
+grid() # add grid
+plot(density(Y),col='red',lwd=2,
+     main='Empirical p.d.f. (red) and our p.d.f (green)',
+     ylab='p.d.f',
+     xlab='y',
+     xlim=c(0,1)) # plot empirical c.d.f. of Y
+points(grd,ourPdf(grd,a),type='l',col='green',lwd=1) # add F_Y
+grid()
+```
+
+Below is a histogram of our generated sample.
+```{r AR3, echo = TRUE}
+hist(Y)
+```
